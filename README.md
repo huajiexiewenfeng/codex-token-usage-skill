@@ -1,5 +1,7 @@
 # Codex Token Usage Skill
 
+[English](README.md) | [中文](README.zh-CN.md)
+
 Codex Token Usage Skill summarizes local Codex Desktop and Codex CLI token usage from session JSONL logs. It reports total usage, net usage, cache hit rate, daily averages, peak day, and busiest week so you can understand recent Codex usage across local sessions.
 
 ## Privacy
