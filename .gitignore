@@ -20,3 +20,4 @@ archived_sessions/
 *.jsonl
 token-usage*.json
 token-usage*.md
+tmp*/
