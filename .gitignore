@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Never commit local Codex state or generated reports
+.codex/
+sessions/
+archived_sessions/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.jsonl
+token-usage*.json
+token-usage*.md
