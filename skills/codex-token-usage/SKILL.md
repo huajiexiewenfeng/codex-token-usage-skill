@@ -1,6 +1,6 @@
 ---
 name: codex-token-usage
-description: Summarize Codex token usage from local Codex Desktop or CLI session JSONL logs. Use when the user asks to count, audit, total, compare, or report Codex/OpenAI token usage for a period such as today, this week, last month, a calendar month, a rolling 30-day window, peak week, peak day, input/output/cached/reasoning breakdown, or net token usage.
+description: Use when the user asks to count, audit, compare, or report local Codex Desktop or CLI token usage, including daily token counts, total or net usage, cache hit rate, peak periods, or an offline HTML usage dashboard.
 ---
 
 # Codex Token Usage
@@ -19,6 +19,8 @@ Use the bundled script to read local Codex session logs and produce a consistent
 3. Report results in a table with these rows: total, input, cached input, output, reasoning output, non-cached input, net usage, cache hit rate, and daily average total.
 4. Include the peak day and busiest week with exact dates.
 5. State the net usage formula.
+6. Include daily counts, including zero-usage dates. JSON and Markdown both include daily rows.
+7. When the user requests a page, chart, visualization, or HTML dashboard, use `--format html --output <path>.html`. Return a clickable local file link and open a preview when the host supports it. Keep reports outside the skill source directory. Default text and JSON workflows remain available.
 
 ## Script
 
@@ -36,6 +38,7 @@ python scripts/codex_token_usage.py --month 2026-04 --timezone Asia/Shanghai
 python scripts/codex_token_usage.py --codex-home C:\Users\admin\.codex --days 30
 python scripts/codex_token_usage.py --days 30 --format json
 python scripts/codex_token_usage.py --days 30 --format markdown --language en
+python scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --output /path/to/output/token-usage.html
 ```
 
 If `python` is not on PATH, use the bundled Codex runtime if available:
@@ -83,4 +86,18 @@ The peak day was 2026-04-01: 72,000,000 tokens.
 The busiest week was 2026-03-30 to 2026-04-05: 244,371,620 tokens.
 ```
 
-Use `--format json` when the result will feed another script, dashboard, automation, or report generator. Use Markdown for direct user answers.
+Use `--format json` when the result will feed another script, automation, or report generator. Use Markdown for text answers. All formats support `--output` for UTF-8 file output.
+
+## HTML Dashboard
+
+The single HTML file embeds its CSS, JavaScript and aggregate report data; it opens offline without a build step, server or CDN. JavaScript must be enabled. Use `--language zh` (default) or `--language en`.
+
+Always generate HTML through the bundled script and `assets/dashboard.html`. Reuse this fixed template for every report; replace aggregate data and language only. Do not redesign the page, generate ad hoc HTML, or change layout, colors or interactions unless the user requests a design change. Responsive layout still adapts to viewport size.
+
+Compact token values, including the 每日明细 (Daily details) table, use 亿 at 100,000,000, 千万 at 10,000,000, and 百万 at 1,000,000, with up to two decimal places. Below one million, show the full number with grouping separators; do not use B, M or K. Table tooltips and CSV keep exact token counts. Event and session counts remain full numbers.
+
+It includes total/net usage, cache hit rate, session count, daily average, daily stacked bars with total/net modes and keyboard-accessible day selection, token composition, peak day/week, a sortable daily table, and CSV export. Dates use the selected reporting timezone. Zero-usage days count toward the average and remain in every output. JSON retains its existing fields and adds `timezone` and `generated_at`; `daily` now contains every date in the range.
+
+Chart components are **non-cached input + cached input + output**. Cached input is part of input, and reasoning is part of output; never stack either subset on top of its parent. If source totals differ from the component sum, the dashboard states the difference. Do not call token events tool calls, or invent model/project rankings, active time or success rates from the existing parser. This is a generated snapshot, not a live monitor.
+
+Generated reports contain usage aggregates only, without prompts, session IDs or source paths. They remain local unless the user asks to share them. Preserve `assets/dashboard.html` alongside `scripts/` when installing the skill.

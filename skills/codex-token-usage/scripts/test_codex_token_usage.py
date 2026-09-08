@@ -3,7 +3,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import re
+from datetime import date
 from pathlib import Path
+from codex_token_usage import build_report, render_html
 
 
 SCRIPT = Path(__file__).with_name("codex_token_usage.py")
@@ -52,7 +55,8 @@ def run_script(codex_home, *args):
         "en",
         *args,
     ]
-    return subprocess.run(command, text=True, capture_output=True, check=True)
+    return subprocess.run(command, text=True, encoding="utf-8", capture_output=True, check=True,
+                          env={**__import__('os').environ, "PYTHONIOENCODING": "utf-8"})
 
 
 def test_json_output():
@@ -83,9 +87,87 @@ def test_markdown_output_mentions_new_metrics():
     assert "| Cache hit rate | 28.57% |" in result.stdout
     assert "| Daily average total | 240 |" in result.stdout
     assert "Peak day: 2026-04-28, 410 tokens." in result.stdout
+    assert "### Daily usage" in result.stdout
+    assert "| 2026-04-28 | 410 | 300 | 90 | 110 | 320 |" in result.stdout
+
+
+def test_zero_days_and_empty_range():
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+        home = Path(temp)
+        write_session(home)
+        data = json.loads(run_script(home, "--start", "2026-04-27", "--end", "2026-04-30", "--format", "json").stdout)
+        assert [r['date'] for r in data['daily']] == ['2026-04-27', '2026-04-28', '2026-04-29', '2026-04-30']
+        assert [r['summary']['total'] for r in data['daily']] == [0, 410, 70, 0]
+        assert data['summary']['daily_average_total'] == 120
+        for key in ['total', 'input', 'cached_input', 'output', 'reasoning', 'net_usage', 'calls']:
+            assert sum(r['summary'][key] for r in data['daily']) == data['summary'][key]
+        empty = json.loads(run_script(home, '--days', '2', '--end', '2026-01-02', '--format', 'json').stdout)
+        assert len(empty['daily']) == 2
+        assert empty['peak_day'] is None and empty['peak_week'] is None
+        assert empty['summary']['cache_hit_rate'] == 0
+
+
+def test_html_and_output_file():
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+        home = Path(temp)
+        write_session(home)
+        target = home / 'report' / '用量.html'
+        run_script(home, '--start', '2026-04-28', '--end', '2026-04-29', '--format', 'html', '--output', str(target), '--language', 'zh')
+        html = target.read_text(encoding='utf-8')
+        assert html.startswith('<!doctype html>') and '<html lang="zh">' in html
+        assert '__REPORT_JSON__' not in html and '__LANGUAGE__' not in html
+        embedded = json.loads(re.search(r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S).group(1))
+        assert embedded['summary']['total'] == 480
+        assert embedded['timezone'] == 'Asia/Shanghai'
+        assert str(home) not in html
+        assert not re.search(r'<(?:script|link)[^>]+(?:src|href)\s*=', html)
+        for output_format in ['json', 'markdown']:
+            output = home / ('output.' + output_format)
+            run_script(home, '--days', '2', '--end', '2026-04-29', '--format', output_format, '--output', str(output))
+            assert output.read_text(encoding='utf-8')
+
+
+def test_embedded_data_cannot_close_script():
+    report = build_report(date(2026, 1, 1), date(2026, 1, 1), [])
+    report['timezone'] = '</script><script>alert("x")</script>&'
+    html = render_html(report)
+    assert report['timezone'] not in html
+    embedded = re.search(r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S).group(1)
+    assert json.loads(embedded)['timezone'] == report['timezone']
+
+
+def test_timezone_and_archive_deduplication():
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+        home = Path(temp)
+        write_session(home)
+        path = next((home / 'sessions').rglob('*.jsonl'))
+        text = path.read_text(encoding='utf-8').replace('2026-04-28T01:00:00.000Z', '2026-04-27T16:00:00.000Z')
+        path.write_text(text, encoding='utf-8')
+        archived = home / 'archived_sessions'
+        archived.mkdir()
+        (archived / path.name).write_text(text, encoding='utf-8')
+        data = json.loads(run_script(home, '--start', '2026-04-28', '--end', '2026-04-29', '--format', 'json').stdout)
+        assert data['summary']['total'] == 480 and data['summary']['calls'] == 3
+        assert data['daily'][0]['summary']['total'] == 410
+
+
+def test_invalid_range():
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+        for args in [('--days', '0'), ('--days', '-1'), ('--start', '2026-05-01', '--end', '2026-04-01')]:
+            try:
+                run_script(Path(temp), *args)
+            except subprocess.CalledProcessError as error:
+                assert 'Invalid range' in error.stderr
+            else:
+                raise AssertionError('Invalid range was accepted')
 
 
 if __name__ == "__main__":
     test_json_output()
     test_markdown_output_mentions_new_metrics()
+    test_zero_days_and_empty_range()
+    test_html_and_output_file()
+    test_embedded_data_cannot_close_script()
+    test_timezone_and_archive_deduplication()
+    test_invalid_range()
     print("tests passed")

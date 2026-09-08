@@ -71,7 +71,8 @@ def parse_args():
     parser.add_argument("--start", default=None, help="Inclusive start date, YYYY-MM-DD.")
     parser.add_argument("--end", default=None, help="Inclusive end date, YYYY-MM-DD.")
     parser.add_argument("--month", default=None, help="Calendar month, YYYY-MM.")
-    parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    parser.add_argument("--format", choices=["markdown", "json", "html"], default="markdown")
+    parser.add_argument("--output", type=pathlib.Path, help="Write the report to a UTF-8 file (all formats).")
     parser.add_argument("--language", choices=["zh", "en"], default="zh")
     return parser.parse_args()
 
@@ -199,9 +200,13 @@ def weekly(events):
     return rows
 
 
-def daily(events):
+def daily(events, start=None, end=None):
     rows = []
-    for day, bucket in sorted(grouped(events, lambda event: event["date"]).items()):
+    buckets = grouped(events, lambda event: event["date"])
+    if start is not None and end is not None:
+        for offset in range((end - start).days + 1):
+            buckets.setdefault(start + timedelta(days=offset), [])
+    for day, bucket in sorted(buckets.items()):
         rows.append({"date": day, "summary": summarize(bucket)})
     return rows
 
@@ -232,9 +237,9 @@ def build_report(start, end, events):
     days = day_count(start, end)
     summary = summarize(events, days=days)
     weeks = weekly(events)
-    days_rows = daily(events)
+    days_rows = daily(events, start, end)
     peak_week = max(weeks, key=lambda row: row["summary"]["total"], default=None)
-    peak_day = max(days_rows, key=lambda row: row["summary"]["total"], default=None)
+    peak_day = max((row for row in days_rows if row["summary"]["calls"]), key=lambda row: row["summary"]["total"], default=None)
     return {
         "start": start,
         "end": end,
@@ -285,6 +290,20 @@ def print_markdown(report, language):
                 f"| {row['start']} to {row['end']} | {fmt(row_summary['total'])} | "
                 f"{row_summary['calls']:,} | {row_summary['sessions']:,} |"
             )
+    print()
+    print("### " + ("每日用量" if language == "zh" else "Daily usage"))
+    print(f"| Date | {labels['total']} | Input | Cached input | Output | {labels['net']} |")
+    print("|---|---:|---:|---:|---:|---:|")
+    for row in report["daily"]:
+        s = row["summary"]
+        print(f"| {row['date']} | {fmt(s['total'])} | {fmt(s['input'])} | {fmt(s['cached_input'])} | {fmt(s['output'])} | {fmt(s['net_usage'])} |")
+
+
+def render_html(report, language="zh"):
+    """Embed aggregate data only; no session paths, prompts or external assets."""
+    template = pathlib.Path(__file__).resolve().parent.parent / "assets" / "dashboard.html"
+    data = json.dumps(json_ready(report), ensure_ascii=False).replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
+    return template.read_text(encoding="utf-8").replace("__REPORT_JSON__", data).replace("__LANGUAGE__", language)
 
 
 def main():
@@ -292,12 +311,30 @@ def main():
     tz = ZoneInfo(args.timezone) if args.timezone else datetime.now().astimezone().tzinfo
     codex_home = pathlib.Path(args.codex_home).expanduser()
     start, end = resolve_range(args, tz)
+    if start > end or (args.days is not None and args.days < 1):
+        raise SystemExit("Invalid range: start must be on or before end, and days must be positive.")
     events = [event for event in iter_token_events(codex_home, tz) if start <= event["date"] <= end]
     report = build_report(start, end, events)
-    if args.format == "json":
-        print_json(report)
+    report["timezone"] = str(tz)
+    report["generated_at"] = datetime.now(tz).isoformat(timespec="seconds")
+    if args.format == "html":
+        output = render_html(report, args.language)
     else:
-        print_markdown(report, args.language)
+        import contextlib
+        import io
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            if args.format == "json":
+                print_json(report)
+            else:
+                print_markdown(report, args.language)
+        output = buffer.getvalue()
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output, encoding="utf-8")
+        print(f"Report written to {args.output.resolve()}")
+    else:
+        print(output, end="")
 
 
 if __name__ == "__main__":

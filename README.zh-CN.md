@@ -70,6 +70,22 @@ python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --form
 python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --codex-home ~/.codex
 ```
 
+## 每日用量与 HTML 看板
+
+保留默认 Markdown 和 JSON 模式，并增加逐日明细（含零用量日期）。生成参考深色分析面板风格的独立 HTML：
+
+```bash
+python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --output output/token-usage.html
+```
+
+直接用浏览器打开文件即可，无需服务端、构建工具或网络连接；浏览器需启用 JavaScript。支持总量/净用量切换、点击或键盘选择每日柱子、Token 构成环图、峰值日/周、按日期或总量排序的每日明细、CSV 导出。使用 `--language en` 切换英文；所有格式都支持 `--output` 写入 UTF-8 文件。
+
+也可以直接对 Codex 说：“生成我最近 30 天的 Token 用量 HTML 看板，展示总数和每天明细。”
+
+图表拆分为非缓存输入、缓存输入和输出，避免重复计算。现有日志解析器不提供成功率、工具调用或工作时长，因此页面不展示推测数值。报告是生成时的快照，含统计时区和生成时间；只嵌入汇总数据，不包含提示词、会话 ID 或日志路径。
+
+JSON 保留原有字段，新增 `timezone`、`generated_at`；`daily` 现在覆盖范围内每个自然日，无用量日期为零。周统计按周一分组，只计入所选范围内的事件。
+
 ## 指标定义
 
 | 指标 | 公式 |
