@@ -5,6 +5,8 @@ import json
 import os
 import pathlib
 import re
+import sys
+import webbrowser
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -71,8 +73,9 @@ def parse_args():
     parser.add_argument("--start", default=None, help="Inclusive start date, YYYY-MM-DD.")
     parser.add_argument("--end", default=None, help="Inclusive end date, YYYY-MM-DD.")
     parser.add_argument("--month", default=None, help="Calendar month, YYYY-MM.")
-    parser.add_argument("--format", choices=["markdown", "json", "html"], default="markdown")
+    parser.add_argument("--format", choices=["markdown", "json", "html"], default="html")
     parser.add_argument("--output", type=pathlib.Path, help="Write the report to a UTF-8 file (all formats).")
+    parser.add_argument("--no-open", action="store_true", help="Generate HTML without opening the external browser (automation/headless use).")
     parser.add_argument("--language", choices=["zh", "en"], default="zh")
     return parser.parse_args()
 
@@ -306,6 +309,21 @@ def render_html(report, language="zh"):
     return template.read_text(encoding="utf-8").replace("__REPORT_JSON__", data).replace("__LANGUAGE__", language)
 
 
+def open_external_report(path):
+    """Ask the OS to open a local report; never use an embedded browser."""
+    path = path.resolve()
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))
+        elif not webbrowser.open(path.as_uri(), new=2):
+            raise OSError("No external browser accepted the open request")
+    except (OSError, webbrowser.Error) as error:
+        print(f"Report saved; could not request external browser: {error}. Open {path} manually.", file=sys.stderr)
+        return False
+    print(f"External browser open requested: {path}")
+    return True
+
+
 def main():
     args = parse_args()
     tz = ZoneInfo(args.timezone) if args.timezone else datetime.now().astimezone().tzinfo
@@ -319,6 +337,8 @@ def main():
     report["generated_at"] = datetime.now(tz).isoformat(timespec="seconds")
     if args.format == "html":
         output = render_html(report, args.language)
+        if args.output is None:
+            args.output = pathlib.Path.cwd() / "output" / f"token-usage-{start}-{end}.html"
     else:
         import contextlib
         import io
@@ -333,6 +353,8 @@ def main():
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output, encoding="utf-8")
         print(f"Report written to {args.output.resolve()}")
+        if args.format == "html" and not args.no_open:
+            open_external_report(args.output)
     else:
         print(output, end="")
 

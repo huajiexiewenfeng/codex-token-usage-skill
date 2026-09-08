@@ -6,6 +6,7 @@ import tempfile
 import re
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 from codex_token_usage import build_report, render_html
 
 
@@ -53,6 +54,7 @@ def run_script(codex_home, *args):
         "Asia/Shanghai",
         "--language",
         "en",
+        "--no-open",
         *args,
     ]
     return subprocess.run(command, text=True, encoding="utf-8", capture_output=True, check=True,
@@ -162,6 +164,37 @@ def test_invalid_range():
                 raise AssertionError('Invalid range was accepted')
 
 
+def test_default_html_and_browser_dispatch():
+    import codex_token_usage as usage
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+        home = Path(temp)
+        write_session(home)
+        with patch.object(sys, 'argv', ['codex_token_usage.py']):
+            args = usage.parse_args()
+            assert args.format == 'html' and args.no_open is False
+        args.codex_home = str(home)
+        args.timezone = 'Asia/Shanghai'
+        args.start, args.end = '2026-04-28', '2026-04-29'
+        expected = home / 'output' / 'token-usage-2026-04-28-2026-04-29.html'
+        with patch.object(usage, 'parse_args', return_value=args), patch.object(Path, 'cwd', return_value=home), patch.object(usage, 'open_external_report') as browser:
+            usage.main()
+            assert expected.exists()
+            browser.assert_called_once_with(expected)
+            browser.reset_mock()
+            args.no_open = True
+            usage.main()
+            browser.assert_not_called()
+        with patch.object(usage.sys, 'platform', 'win32'), patch.object(usage.os, 'startfile', create=True) as startfile:
+            assert usage.open_external_report(expected)
+            startfile.assert_called_once_with(str(expected.resolve()))
+        with patch.object(usage.sys, 'platform', 'linux'), patch.object(usage.webbrowser, 'open', return_value=True) as browser:
+            assert usage.open_external_report(expected)
+            browser.assert_called_once_with(expected.resolve().as_uri(), new=2)
+        with patch.object(usage.sys, 'platform', 'linux'), patch.object(usage.webbrowser, 'open', return_value=False):
+            assert not usage.open_external_report(expected)
+            assert expected.exists()
+
+
 if __name__ == "__main__":
     test_json_output()
     test_markdown_output_mentions_new_metrics()
@@ -170,4 +203,5 @@ if __name__ == "__main__":
     test_embedded_data_cannot_close_script()
     test_timezone_and_archive_deduplication()
     test_invalid_range()
+    test_default_html_and_browser_dispatch()
     print("tests passed")

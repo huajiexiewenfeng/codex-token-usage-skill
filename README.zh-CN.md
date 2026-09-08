@@ -72,13 +72,17 @@ python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --code
 
 ## 每日用量与 HTML 看板
 
-保留默认 Markdown 和 JSON 模式，并增加逐日明细（含零用量日期）。生成参考深色分析面板风格的独立 HTML：
+现在默认生成固定模板的 HTML 看板，并请求系统默认外部浏览器打开；“统计本周用量”等普通请求也使用此行为。默认文件位于当前工作目录的 `output/token-usage-<开始日期>-<结束日期>.html`。每日明细包含零用量日期，Token 显示使用亿、千万、百万，不足百万显示完整数字。
+
+生成深色分析面板：
 
 ```bash
 python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --output output/token-usage.html
 ```
 
 直接用浏览器打开文件即可，无需服务端、构建工具或网络连接；浏览器需启用 JavaScript。支持总量/净用量切换、点击或键盘选择每日柱子、Token 构成环图、峰值日/周、按日期或总量排序的每日明细、CSV 导出。使用 `--language en` 切换英文；所有格式都支持 `--output` 写入 UTF-8 文件。
+
+自动化或仅生成文件时加 `--no-open`。需要旧的文字输出时显式使用 `--format markdown`；JSON 使用 `--format json`。这两种格式不会打开浏览器。浏览器启动失败时仍保留报告文件并提示路径。升级前依赖默认 stdout Markdown 的脚本需补上 `--format markdown`。
 
 也可以直接对 Codex 说：“生成我最近 30 天的 Token 用量 HTML 看板，展示总数和每天明细。”
 

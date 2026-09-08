@@ -9,22 +9,24 @@ description: Use when the user asks to count, audit, compare, or report local Co
 
 Use the bundled script to read local Codex session logs and produce a consistent token usage report. Prefer deterministic script output over ad hoc `rg` summaries.
 
+**Default: generate the fixed HTML dashboard and open it in the system's default external browser.** This also applies to plain requests such as “统计本周用量” or “统计下 token”. Do not answer with only a Markdown table unless the user explicitly requests text, Markdown, JSON, or no browser. Re-read this installed file when reusing an old task; earlier task instructions may describe the old Markdown default.
+
 ## Workflow
 
 1. Identify the reporting window from the user request.
    - If the user asks for "one month" or "last month" without naming a calendar month, use the last 30 local calendar days ending today.
    - If the user asks for "this month" or names a specific month, use that calendar month, clipped to today if it is the current month.
    - Use the user's timezone from context when available; default to the local machine timezone only if no timezone is provided.
-2. Run `scripts/codex_token_usage.py`.
-3. Report results in a table with these rows: total, input, cached input, output, reasoning output, non-cached input, net usage, cache hit rate, and daily average total.
-4. Include the peak day and busiest week with exact dates.
-5. State the net usage formula.
-6. Include daily counts, including zero-usage dates. JSON and Markdown both include daily rows.
-7. When the user requests a page, chart, visualization, or HTML dashboard, use `--format html --output <path>.html`. Return a clickable local file link and open a preview when the host supports it. Keep reports outside the skill source directory. Default text and JSON workflows remain available.
+   - “This week” means Monday through today in that timezone; pass explicit `--start` and `--end` dates.
+2. Run the installed `scripts/codex_token_usage.py` from the user's workspace with the reporting dates and timezone. Resolve the script from the skill directory containing this file. Use the active `CODEX_HOME` for logs when present; do not infer log location from a legacy skill installation path.
+3. Unless explicitly overridden, use HTML (the CLI default). The script writes `output/token-usage-<start>-<end>.html` under the working directory and requests the system's default external browser to open it. `--output` overrides the file path. Keep reports outside the skill source directory.
+4. Do not substitute an in-app browser preview. If opening fails or is blocked, provide the saved file link and accurately state that it was not opened; do not bypass host restrictions. A successful OS launch request alone is not evidence that the page rendered.
+5. Return a clickable absolute HTML file link, exact date range and a short summary. The dashboard contains daily counts, peak periods and metric definitions; do not replace it with a long Markdown table.
+6. For explicit text/Markdown requests, pass `--format markdown`; for machine-readable requests, pass `--format json`. These formats print to stdout unless `--output` is provided and do not open a browser. For automation or a user request not to open a browser, use `--no-open` with HTML.
 
 ## Script
 
-Run from the skill directory or pass an absolute script path:
+Run from the user's workspace, passing the installed script's absolute path (relative examples below are shorthand):
 
 ```bash
 python scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai
@@ -39,6 +41,7 @@ python scripts/codex_token_usage.py --codex-home C:\Users\admin\.codex --days 30
 python scripts/codex_token_usage.py --days 30 --format json
 python scripts/codex_token_usage.py --days 30 --format markdown --language en
 python scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --output /path/to/output/token-usage.html
+python scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --no-open
 ```
 
 If `python` is not on PATH, use the bundled Codex runtime if available:
@@ -63,7 +66,7 @@ Avoid summing `total_token_usage` for each event because it is cumulative within
 
 ## Response Format
 
-Use a concise Markdown table. Localize row labels to the user's language. For Chinese responses, use labels like total, Input, Cached input, Output, Reasoning output, non-cached Input, and net usage in Chinese where appropriate.
+By default, provide the HTML file link and a short summary after requesting the external browser. Only for an explicit text/Markdown request, use the concise table below. Localize row labels to the user's language.
 
 ```markdown
 | Metric | Tokens | Notes |

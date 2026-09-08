@@ -64,13 +64,17 @@ python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --code
 
 ## Daily Usage and HTML Dashboard
 
-The default Markdown and JSON modes remain available and now include every day in the selected range, including zero-usage dates. Generate a self-contained dark analytics dashboard:
+The default now generates the fixed HTML dashboard and asks the system's default external browser to open it, including for plain requests such as “summarize this week's usage.” The default file is `output/token-usage-<start>-<end>.html` under the working directory. Daily rows include zero-usage dates. Token displays use 亿, 千万 and 百万, with full numbers below one million.
+
+Generate a self-contained dark analytics dashboard:
 
 ```bash
 python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --language en --output output/token-usage.html
 ```
 
 Open the file in a browser with JavaScript enabled. No build, server, CDN or network connection is required. The dashboard includes total/net usage, daily stacked bars with keyboard-accessible day selection, token composition, peak day/week, a sortable daily table and CSV export. All formats support `--output` for UTF-8 files; use `--language zh` for Chinese.
+
+Use `--no-open` for automation or file-only generation. For text output, explicitly pass `--format markdown`; for JSON, pass `--format json`. Neither opens a browser. A failed browser launch preserves the report and prints its path. Existing scripts that depended on default Markdown stdout must add `--format markdown` when upgrading.
 
 You can also ask Codex: “Generate an HTML dashboard of my last 30 days of token usage, including totals and daily details.”
 
