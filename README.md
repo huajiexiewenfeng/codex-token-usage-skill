@@ -1,121 +1,131 @@
 # Codex Token Usage Skill
 
-[English](README.md) | [中文](README.zh-CN.md)
+**English** | [中文](README.zh-CN.md)
 
-Codex Token Usage Skill summarizes local Codex Desktop and Codex CLI token usage from session JSONL logs. It reports total usage, net usage, cache hit rate, daily averages, peak day, and busiest week so you can understand recent Codex usage across local sessions.
+**See your Codex token usage, from the total down to every day.**
 
-## Privacy
+Analyze local Codex Desktop / CLI session logs, generate an offline HTML dashboard, and open it in your system's default external browser. After installation, just ask Codex: “Summarize this week's usage.”
 
-This skill reads local files only. It does not upload logs, auth data, SQLite databases, or usage reports.
+## Dashboard preview
 
-## Install
+Track total and net tokens, cache hit rate, sessions and daily averages. Switch the daily chart between total and net usage, and explore mutually exclusive token categories.
 
-Install the skill with Skills CLI:
+![Codex usage dashboard with summary cards, daily trends and token breakdown](docs/images/usage-dashboard.png)
+
+Sort daily details by date or total usage, hover for exact counts, and export a CSV for further analysis.
+
+![Daily details with peak day, cache reuse, busiest week and daily token counts](docs/images/daily-details.png)
+
+*Screenshots show a local report snapshot with the Chinese interface. Your results depend on your logs, date range and timezone; English labels are available with `--language en`.*
+
+## Install and use
+
+Install into your Codex environment with Skills CLI:
 
 ```bash
 npx skills add https://github.com/huajiexiewenfeng/codex-token-usage-skill --skill codex-token-usage
 ```
 
-List available skills from the repository:
-
-```bash
-npx skills add https://github.com/huajiexiewenfeng/codex-token-usage-skill --list
-```
-
-## Codex Usage Examples
-
-After installation, ask Codex for usage summaries in plain language:
+Then ask Codex in plain language:
 
 ```text
-Summarize my Codex token usage for the last 30 days, including net usage and peak day.
+Summarize my Codex token usage for this week.
 ```
 
 ```text
-Show my Codex token usage for April 2026 with cache hit rate and busiest week.
+Show my last 30 days of usage, including daily counts and cache hit rate.
 ```
 
 ```text
-Compare my daily average Codex token usage this month.
+Generate an HTML dashboard of my usage for August 2026.
 ```
 
-## Direct Script Examples
+The skill resolves the dates, runs the report script, generates the fixed HTML template and requests an external browser to open it.
 
-Run the bundled report script directly from the repository root:
+| Section | Contents |
+| --- | --- |
+| Overview | Total tokens, net tokens, cache hit rate, active sessions and daily average |
+| Daily trend | Stacked bars, reported-total line, total/net switch and keyboard-accessible day selection |
+| Token breakdown | Uncached input, cached input, output and any difference from the reported total |
+| Highlights | Peak day, cache reuse and busiest week |
+| Daily details | All dates including inactive days, sorting, exact-value tooltips and CSV export |
+
+Compact token values use **亿 (100 million), 千万 (10 million) and 百万 (1 million)** in both interface languages. Values below one million are shown in full. Daily tables use the same units; tooltips and CSV retain exact counts.
+
+## Run the script directly
+
+Requires Python 3.9+. IANA timezones require a system timezone database or the `tzdata` package. Run these examples from the repository root.
+
+Generate and open a dashboard for the last 30 calendar days:
 
 ```bash
-python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30
+python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --language en
 ```
 
-```bash
-python -B skills/codex-token-usage/scripts/codex_token_usage.py --month 2026-04
-```
+The default output is `output/token-usage-<start>-<end>.html` under the working directory.
+
+| Option | Purpose | Example |
+| --- | --- | --- |
+| `--days` | Last N calendar days ending today or on `--end` | `--days 7` |
+| `--month` | Calendar month, clipped to today for the current month | `--month 2026-08` |
+| `--start` / `--end` | Inclusive date range | `--start 2026-09-01 --end 2026-09-08` |
+| `--timezone` | Reporting timezone | `--timezone Asia/Shanghai` |
+| `--codex-home` | Log directory; defaults to `CODEX_HOME`, then `~/.codex` | `--codex-home ~/.codex` |
+| `--output` | Output file, supported by all formats | `--output output/usage.html` |
+| `--no-open` | Generate HTML without launching a browser | `--no-open` |
+| `--format` | HTML (default), Markdown or JSON | `--format json` |
+| `--language` | Chinese (default) or English labels | `--language en` |
+
+“This week” means Monday through today. When using the script directly, pass those dates with `--start` and `--end`; `--days 7` is a rolling seven-day window.
+
+Generate a file for automation:
 
 ```bash
-python -B skills/codex-token-usage/scripts/codex_token_usage.py --start 2026-04-01 --end 2026-04-29
+python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --no-open --output output/usage.html
 ```
 
+Use text or machine-readable output:
+
 ```bash
+python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --format markdown
 python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --format json
 ```
 
-```bash
-python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --codex-home ~/.codex
-```
+Markdown and JSON print to stdout by default and do not open a browser. **Scripts that relied on the old default Markdown output must add `--format markdown` when upgrading.** If an existing Codex task retains old instructions, ask it to reread the installed codex-token-usage skill.
 
-## Daily Usage and HTML Dashboard
+## How usage is counted
 
-The default now generates the fixed HTML dashboard and asks the system's default external browser to open it, including for plain requests such as “summarize this week's usage.” The default file is `output/token-usage-<start>-<end>.html` under the working directory. Daily rows include zero-usage dates. Token displays use 亿, 千万 and 百万, with full numbers below one million.
+The script reads JSONL files in `sessions/` and `archived_sessions/`, deduplicates events by session, timestamp and selected usage fields, and sums `last_token_usage` from `token_count` events. It does not sum the cumulative `total_token_usage` on every event.
 
-Generate a self-contained dark analytics dashboard:
-
-```bash
-python -B skills/codex-token-usage/scripts/codex_token_usage.py --days 30 --timezone Asia/Shanghai --format html --language en --output output/token-usage.html
-```
-
-Open the file in a browser with JavaScript enabled. No build, server, CDN or network connection is required. The dashboard includes total/net usage, daily stacked bars with keyboard-accessible day selection, token composition, peak day/week, a sortable daily table and CSV export. All formats support `--output` for UTF-8 files; use `--language zh` for Chinese.
-
-Use `--no-open` for automation or file-only generation. For text output, explicitly pass `--format markdown`; for JSON, pass `--format json`. Neither opens a browser. A failed browser launch preserves the report and prints its path. Existing scripts that depended on default Markdown stdout must add `--format markdown` when upgrading.
-
-You can also ask Codex: “Generate an HTML dashboard of my last 30 days of token usage, including totals and daily details.”
-
-Charts stack uncached input, cached input and output without double-counting. The current parser does not supply success rates, tool calls or active duration, so these are not inferred. Reports are snapshots with timezone and generation time. Only aggregate data is embedded, without prompts, session IDs or source paths.
-
-JSON retains existing fields and adds `timezone` and `generated_at`. Its `daily` array now includes all calendar dates in the range, with zeros for inactive dates. Weeks start on Monday and count only events inside the requested range.
-
-## Metric Definitions
-
-| Metric | Formula |
+| Metric | Calculation |
 | --- | --- |
 | Total | Sum of `last_token_usage.total_tokens` |
-| Input | Sum of `last_token_usage.input_tokens` |
-| Cached input | Sum of `last_token_usage.cached_input_tokens` |
-| Output | Sum of `last_token_usage.output_tokens` |
-| Reasoning output | Sum of `last_token_usage.reasoning_output_tokens` |
-| Non-cached input | `Input - Cached input` |
-| Net usage | `Non-cached input + Output` |
-| Cache hit rate | `Cached input / Input` |
-| Daily average total | `Total / days in range` |
+| Input / cached input | Sum of `input_tokens` / `cached_input_tokens` |
+| Output / reasoning output | Sum of `output_tokens` / `reasoning_output_tokens` |
+| Uncached input | `Input − cached input` |
+| Net usage | `Uncached input + output` |
+| Cache hit rate | `Cached input ÷ input` |
+| Daily average | `Total ÷ selected calendar days`, including inactive dates |
 
-## Verify
+Cache is part of input, and reasoning is part of output; neither is stacked twice. Reported totals may differ from input plus output, and the dashboard states the difference. Weeks start on Monday and count only events in the selected range. Token event counts are not tool call counts.
 
-Run the test script:
+These are statistics from locally readable logs, not account billing or live quota data. The report does not infer success rates, active duration or model/project rankings. JSON includes summary, daily and weekly rows, peaks, timezone and generation time.
+
+## Local and offline
+
+The report process does not upload logs, credentials or usage reports. HTML embeds aggregate data only, without prompts, session IDs or source log paths.
+
+Every report uses the same template with embedded CSS, JavaScript and data. No server, build step or CDN is required; JavaScript must be enabled in the browser. Reports are snapshots and update when regenerated. If browser launch fails, the saved file can still be opened manually.
+
+## Development checks
 
 ```bash
 python -B skills/codex-token-usage/scripts/test_codex_token_usage.py
-```
-
-Run quick validation:
-
-```bash
-python C:\Users\admin\.codex\skills\.system\skill-creator\scripts\quick_validate.py skills/codex-token-usage
-```
-
-Verify local Skills CLI metadata:
-
-```bash
 npx skills add . --list
 ```
 
+Tests cover daily/summary consistency, inactive dates, timezones, archive deduplication, HTML export, default browser dispatch and `--no-open`. Browser launches are mocked in tests.
+
 ## License
 
-MIT
+[MIT](LICENSE)
